@@ -1,28 +1,39 @@
 #!/usr/bin/env python
 # Display a runtext with double-buffering.
-from samplebase import SampleBase
-from rgbmatrix import RGBMatrix, RGBMatrixOptions
-from rgbmatrix import graphics
+try:
+    from samplebase import SampleBase
+    from rgbmatrix import RGBMatrix, RGBMatrixOptions
+    from rgbmatrix import graphics
+    # Configuration for the matrix
+    options = RGBMatrixOptions()
+    options.rows = 32
+    options.cols = 64
+    options.chain_length = 2
+    options.parallel = 1
+    options.hardware_mapping = 'adafruit-hat'
+    options.led_rgb_sequence = 'RBG'    
+    options.pixel_mapper_config = 'Rotate:180'
+
+    matrix = RGBMatrix(options = options)
+    runningOnPi = True
+except ModuleNotFoundError:
+    runningOnPi = False
+    class matrix:
+        def __init__(self):
+            self.width = 128
+            self.height = 32
+    matrix = matrix()
+
 from PIL import Image, ImageDraw
 import datetime
 import time
 import os
 import sys
 import numpy as np
-# Configuration for the matrix
-options = RGBMatrixOptions()
-options.rows = 32
-options.cols = 64
-options.chain_length = 2
-options.parallel = 1
-options.hardware_mapping = 'adafruit-hat'
-options.led_rgb_sequence = 'RBG'    
-options.pixel_mapper_config = 'Rotate:180'
 
-matrix = RGBMatrix(options = options)
 
-class ForestFire(SampleBase):
-    def __init__(self, timestep, probs, sigmaProb, density=0.5, num_burn_points=3, *args, **kwargs):
+class ForestFire():
+    def __init__(self, timestep, probs, sigmaProb, density=0.5, num_burn_points=3, seed = 1000, *args, **kwargs):
         """
         Initialize the ForestFire class with customizable inputs.
         
@@ -37,6 +48,8 @@ class ForestFire(SampleBase):
         self.sigmaProb = sigmaProb
         self.density = density
         self.num_burn_points = num_burn_points
+        # Create a PRNG object with a specific seed
+        self.prng = np.random.default_rng(seed)       
         self.run()
 
 
@@ -48,13 +61,13 @@ class ForestFire(SampleBase):
         # Initialize forest array and reshape
         self.forest = np.zeros((height, width), dtype=int)  # Create a 2D array
         num_ones = int(size * self.density)
-        indices = np.random.choice(size, num_ones, replace=False)
+        indices = self.prng.choice(size, num_ones, replace=False)
 
         self.forest.flat[indices] = 1
 
         # Initialize random old growth trees
         StartOldGrowth=30
-        oldgrowth_indices = np.random.choice(size, StartOldGrowth, replace=False)
+        oldgrowth_indices = self.prng.choice(size, StartOldGrowth, replace=False)
         for index in oldgrowth_indices:
             row, col = divmod(index, width)
             self.forest[row, col] = 3
@@ -94,7 +107,8 @@ class ForestFire(SampleBase):
             print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t|")  # Print the new value
             print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
             # Send to Panel
-            matrix.SetImage(self.forestToImage().convert('RGB'))
+            if runningOnPi:
+                matrix.SetImage(self.forestToImage().convert('RGB'))
             # wait
             # input("continue")
             time.sleep(self.timestep)
@@ -114,14 +128,14 @@ class ForestFire(SampleBase):
                     for dx, dy in directions:
                         ni, nj = i + dx, j + dy
                         if 0 <= ni < height and 0 <= nj < width and self.forest[ni, nj] == 2:
-                            if np.random.rand() < FireSpreadRate:  # Spread fire with a probability
+                            if self.prng.uniform(0,1) < FireSpreadRate:  # Spread fire with a probability
                                 new_forest[i, j] = 2  # Set fire
                                 break  # No need to check further neighbors
 
                 elif self.forest[i, j] == 2:  # Burning tree
-                    if np.random.rand() < FireDeathRate:
+                    if self.prng.uniform(0,1) < FireDeathRate:
                         new_forest[i, j] = 0  # Tree is burned down
-                    elif np.random.rand() < FireExtinguishRate:
+                    elif self.prng.uniform(0,1) < FireExtinguishRate:
                         new_forest[i, j] = TreeType  # Tree fire goes out
 
         self.forest = new_forest
@@ -141,15 +155,15 @@ class ForestFire(SampleBase):
                     for dx, dy in directions:
                         ni, nj = i + dx, j + dy
                         if 0 <= ni < height and 0 <= nj < width and self.forest[ni, nj] == TreeType:
-                            if np.random.rand() < GrowthSpreadRate:  # Spread growth with probability
+                            if self.prng.uniform(0,1) < GrowthSpreadRate:  # Spread growth with probability
                                 new_forest[i, j] = TreeType  # tree grows
                                 break  # No need to check further neighbors
                 
                 # sometimes trees die
                 elif self.forest[i, j] == TreeType:
-                    if np.random.rand() < NaturalDeathRate:
+                    if self.prng.uniform(0,1) < NaturalDeathRate:
                         new_forest[i, j] = 0  # Tree dies
-                    if np.random.rand() < LightningRate:
+                    if self.prng.uniform(0,1) < LightningRate:
                         new_forest[i, j] = 2  # Tree gets hit by Lightning, set on fire
 
         self.forest = new_forest
