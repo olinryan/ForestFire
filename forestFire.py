@@ -33,7 +33,7 @@ import numpy as np
 
 
 class ForestFire():
-    def __init__(self, timestep, probs, density=0.5, num_burn_points=3, seed = 1000, *args, **kwargs):
+    def __init__(self, timestep, probs, density=0.000245, num_burn_points=3, seed = 1000, *args, **kwargs):
         """
         Initialize the ForestFire class with customizable inputs.
         
@@ -62,7 +62,7 @@ class ForestFire():
         self.forest.flat[indices] = 1
 
         # Initialize random old growth trees
-        StartOldGrowth=30
+        StartOldGrowth=1
         oldgrowth_indices = self.prng.choice(size, StartOldGrowth, replace=False)
         for index in oldgrowth_indices:
             row, col = divmod(index, width)
@@ -82,8 +82,7 @@ class ForestFire():
                 fire = treeCount[2]
             except KeyError:
                 fire = 0
-            print(treeCount)
-            print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- Trees -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+            print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- Trees -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
             print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t|")
             print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t|")  # Print the new value
             print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
@@ -176,15 +175,26 @@ class ForestFire():
 
         # Define Colors:
 
-        # # Good Colors:
+        # Green - Red:
         # alive = (70, 125, 4)
         # oldGrowth = (2, 234, 86)
         # burning = (252, 94, 3)
 
-        # Random:
-        alive = (70, 25, 140)
-        oldGrowth = (200, 234, 0)
-        burning = (210, 94, 190)
+        # Purple - pink:
+        # alive = (70, 25, 140)
+        # oldGrowth = (200, 234, 0)
+        # burning = (210, 94, 190)
+
+        # Yellow - Blue:
+        alive = (170, 125, 10)
+        oldGrowth = (210, 34, 30)
+        burning = (0, 94, 245)
+
+        # Secondary:
+        # alive = (255, 0, 255)
+        # oldGrowth = (0, 255, 255)
+        # burning = (255, 255, 0)    
+
         dead = (0, 0, 0)
 
         for i in range(height):
@@ -210,7 +220,7 @@ if __name__ == "__main__":
         'BasicTree' : {
             'GrowthSpreadRate'  : 0.02,
             'NaturalDeathRate'  : 0.01,
-            'LightningRate'     : 0.00001,
+            'LightningRate'     : 0.00001,      # 0.0000001
             'FireSpreadRate'    : 0.9,
             'FireDeathRate'     : 0.1,
             'FireExtinguishRate': 0.1
@@ -218,14 +228,15 @@ if __name__ == "__main__":
         'OldGrowth' : {
             'GrowthSpreadRate'  : 0.001,
             'NaturalDeathRate'  : 0.0005,
-            'LightningRate'     : 0.0000005,
-            'FireSpreadRate'    : 0.3,          # Resistance to burning
+            'LightningRate'     : 0.0000005,    # 0.000005
+            'FireSpreadRate'    : 0.3,   # 0.03 # Resistance to burning
             'FireDeathRate'     : 0.001,
             'FireExtinguishRate': 0.01
         }
     }
+
     run_fire = ForestFire(
-        timestep=0.03,
+        timestep=0.01,
         density=0.00025,
         probs=probabilities
     )
