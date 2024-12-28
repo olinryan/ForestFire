@@ -33,7 +33,7 @@ import numpy as np
 
 
 class ForestFire():
-    def __init__(self, timestep, probs, sigmaProb, density=0.5, num_burn_points=3, seed = 1000, *args, **kwargs):
+    def __init__(self, timestep, probs, density=0.5, num_burn_points=3, seed = 1000, *args, **kwargs):
         """
         Initialize the ForestFire class with customizable inputs.
         
@@ -45,15 +45,11 @@ class ForestFire():
         """
         self.timestep = timestep
         self.probArray = probs
-        self.sigmaProb = sigmaProb
         self.density = density
         self.num_burn_points = num_burn_points
         # Create a PRNG object with a specific seed
         self.prng = np.random.default_rng(seed)       
-        self.run()
 
-
-    def run(self):
         width, height = matrix.width, matrix.height
 
         size = width * height
@@ -72,27 +68,12 @@ class ForestFire():
             row, col = divmod(index, width)
             self.forest[row, col] = 3
 
+    def run(self):
         def clear_terminal():
             print("\033[H\033[J", end="")  # ANSI sequence to clear screen and reset cursor
 
         while True:
-            self.burn( TreeType=1,
-                FireSpreadRate          =self.probArray['BasicTree']['FireSpreadRate'], 
-                FireDeathRate           =self.probArray['BasicTree']['FireDeathRate'], 
-                FireExtinguishRate      =self.probArray['BasicTree']['FireExtinguishRate'] )  # Spread the fire
-            self.grow(  TreeType=1,
-                GrowthSpreadRate        =self.probArray['BasicTree']['GrowthSpreadRate'], 
-                NaturalDeathRate        =self.probArray['BasicTree']['NaturalDeathRate'], 
-                LightningRate           =self.probArray['BasicTree']['LightningRate'] )  # Grow back trees
-            self.burn( TreeType=3,
-                FireSpreadRate          =self.probArray['OldGrowth']['FireSpreadRate'], 
-                FireDeathRate           =self.probArray['OldGrowth']['FireDeathRate'], 
-                FireExtinguishRate      =self.probArray['OldGrowth']['FireExtinguishRate'] )  # Spread the fire
-            self.grow(  TreeType=3,
-                GrowthSpreadRate        =self.probArray['OldGrowth']['GrowthSpreadRate'], 
-                NaturalDeathRate        =self.probArray['OldGrowth']['NaturalDeathRate'], 
-                LightningRate           =self.probArray['OldGrowth']['LightningRate'] )  # Grow back trees
-
+            self.cycle()       # perscribed grow-burn cycle 
             clear_terminal()  # Clear the screen
             # get counts for the various tree states
             unique, counts = np.unique(self.forest, return_counts=True)
@@ -112,6 +93,26 @@ class ForestFire():
             # wait
             # input("continue")
             time.sleep(self.timestep)
+
+    def cycle(self):
+        
+        self.burn( TreeType=1,
+            FireSpreadRate          =self.probArray['BasicTree']['FireSpreadRate'], 
+            FireDeathRate           =self.probArray['BasicTree']['FireDeathRate'], 
+            FireExtinguishRate      =self.probArray['BasicTree']['FireExtinguishRate'] )  # Spread the fire
+        self.grow(  TreeType=1,
+            GrowthSpreadRate        =self.probArray['BasicTree']['GrowthSpreadRate'], 
+            NaturalDeathRate        =self.probArray['BasicTree']['NaturalDeathRate'], 
+            LightningRate           =self.probArray['BasicTree']['LightningRate'] )  # Grow back trees
+        self.burn( TreeType=3,
+            FireSpreadRate          =self.probArray['OldGrowth']['FireSpreadRate'], 
+            FireDeathRate           =self.probArray['OldGrowth']['FireDeathRate'], 
+            FireExtinguishRate      =self.probArray['OldGrowth']['FireExtinguishRate'] )  # Spread the fire
+        self.grow(  TreeType=3,
+            GrowthSpreadRate        =self.probArray['OldGrowth']['GrowthSpreadRate'], 
+            NaturalDeathRate        =self.probArray['OldGrowth']['NaturalDeathRate'], 
+            LightningRate           =self.probArray['OldGrowth']['LightningRate'] )  # Grow back trees
+
 
     def burn(self, TreeType, FireSpreadRate=0.9, FireDeathRate=0.1, FireExtinguishRate=0.1):
         """Simulate fire spreading based on adjacency to burning trees"""
@@ -223,8 +224,9 @@ if __name__ == "__main__":
             'FireExtinguishRate': 0.01
         }
     }
-    run_text = ForestFire(
+    run_fire = ForestFire(
         timestep=0.03,
-        probs=probabilities,
-        sigmaProb=0.03
+        density=0.00025,
+        probs=probabilities
     )
+    run_fire.run()
