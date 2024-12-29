@@ -33,7 +33,7 @@ import numpy as np
 
 
 class ForestFire():
-    def __init__(self, timestep, probs, density=0.000245, num_burn_points=3, seed = 1000, *args, **kwargs):
+    def __init__(self, timestep, probs, density=0.000245, mutation_rate=0.01, seed = 1000, *args, **kwargs):
         """
         Initialize the ForestFire class with customizable inputs.
         
@@ -41,12 +41,12 @@ class ForestFire():
         :param meanProb: Probability for a tree to catch fire.
         :param sigmaProb: Spread probability for fire.
         :param density: Density of trees in the forest, 1 for full.
-        :param num_burn_points: Number of initial random fire points.
         """
         self.timestep = timestep
         self.probArray = probs
         self.density = density
-        self.num_burn_points = num_burn_points
+        self.generation = 0  # Start from generation 0
+        self.mutation_rate = mutation_rate
         # Create a PRNG object with a specific seed
         self.prng = np.random.default_rng(seed)       
 
@@ -62,7 +62,7 @@ class ForestFire():
         self.forest.flat[indices] = 1
 
         # Initialize random old growth trees
-        StartOldGrowth=1
+        StartOldGrowth=204
         oldgrowth_indices = self.prng.choice(size, StartOldGrowth, replace=False)
         for index in oldgrowth_indices:
             row, col = divmod(index, width)
@@ -74,6 +74,9 @@ class ForestFire():
 
         while True:
             self.cycle()       # perscribed grow-burn cycle 
+            # self.evolve()  # Apply evolution after each cycle
+            self.generation += 1  # Increment generation counter
+
             clear_terminal()  # Clear the screen
             # get counts for the various tree states
             unique, counts = np.unique(self.forest, return_counts=True)
@@ -82,10 +85,19 @@ class ForestFire():
                 fire = treeCount[2]
             except KeyError:
                 fire = 0
-            print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- Trees -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
-            print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t|")
-            print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t|")  # Print the new value
+            print(f"|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- TREES -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+            print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t |")
+            print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t |")  # Print the new value
+            # Print the header for parameters
             print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+            
+            print("\n|-- -- -- -- TREE PARAMETERS -- -- -- --|")
+            for tree_type, params in self.probArray.items():
+                print(f"| {tree_type.center(37)} |")
+                for param, value in params.items():
+                    print(f"| {param}: \t\t{value:.5f}\t|")
+                print("|-- -- -- -- -- -- -- -- -- -- -- -- -- |")  # New line after each tree type
+                
             # Send to Panel
             if runningOnPi:
                 matrix.SetImage(self.forestToImage().convert('RGB'))
@@ -167,6 +179,42 @@ class ForestFire():
                         new_forest[i, j] = 2  # Tree gets hit by Lightning, set on fire
 
         self.forest = new_forest
+    
+    def evolve(self):
+        """
+        Apply evolutionary changes to tree properties based on survival metrics.
+        """
+        survival_counts = {key: 0 for key in self.probArray.keys()}
+        
+        # Count the number of surviving trees of each type
+        for tree_type in self.probArray.keys():
+            if tree_type == 'BasicTree':
+                survival_counts[tree_type] = np.sum(self.forest == 1)
+            elif tree_type == 'OldGrowth':
+                survival_counts[tree_type] = np.sum(self.forest == 3)
+
+        total_trees = sum(survival_counts.values())
+        if total_trees == 0:
+            return  # No trees survived; no evolution possible.
+        print(f"Survival Rate: {survival_counts}")
+        print(f'Total Trees: {total_trees}')
+
+        # Adjust probabilities based on survival rates
+        for tree_type, count in survival_counts.items():
+            survival_rate = count / total_trees
+
+            # Modify probabilities adaptively
+            self.probArray[tree_type]['GrowthSpreadRate'] *=  survival_rate
+            self.probArray[tree_type]['NaturalDeathRate'] *=  survival_rate
+            self.probArray[tree_type]['FireDeathRate'] *= survival_rate
+            self.probArray[tree_type]['FireSpreadRate'] *= survival_rate
+            self.probArray[tree_type]['FireExtinguishRate'] *= survival_rate
+
+            # Apply mutations
+            for key in self.probArray[tree_type]:
+                if self.prng.uniform(0, 1) < self.mutation_rate:
+                    self.probArray[tree_type][key] += self.prng.uniform(-0.01, 0.01)  # Small random mutation
+                    self.probArray[tree_type][key] = max(0, min(1, self.probArray[tree_type][key]))  # Clamp values to [0, 1]
 
     def forestToImage(self):
         '''turn the forest array into an image'''
@@ -222,7 +270,7 @@ if __name__ == "__main__":
             'NaturalDeathRate'  : 0.01,
             'LightningRate'     : 0.00001,      # 0.0000001
             'FireSpreadRate'    : 0.9,
-            'FireDeathRate'     : 0.1,
+            'FireDeathRate'     : 0.4,
             'FireExtinguishRate': 0.1
         },
         'OldGrowth' : {
@@ -230,14 +278,34 @@ if __name__ == "__main__":
             'NaturalDeathRate'  : 0.0005,
             'LightningRate'     : 0.0000005,    # 0.000005
             'FireSpreadRate'    : 0.3,   # 0.03 # Resistance to burning
-            'FireDeathRate'     : 0.001,
+            'FireDeathRate'     : 0.01,
             'FireExtinguishRate': 0.01
         }
     }
+    # probabilities = {
+    #     'BasicTree' : {
+    #         'GrowthSpreadRate'  : 0.02,
+    #         'NaturalDeathRate'  : 0.01,
+    #         'LightningRate'     : 0.0000001,      # 0.0000001
+    #         'FireSpreadRate'    : 0.9,
+    #         'FireDeathRate'     : 0.3,
+    #         'FireExtinguishRate': 0.1
+    #     },
+    #     'OldGrowth' : {
+    #         'GrowthSpreadRate'  : 0.02,
+    #         'NaturalDeathRate'  : 0.01,
+    #         'LightningRate'     : 0.0000001,      # 0.0000001
+    #         'FireSpreadRate'    : 0.9,
+    #         'FireDeathRate'     : 0.3,
+    #         'FireExtinguishRate': 0.1
+    #     }
+    # }
 
     run_fire = ForestFire(
-        timestep=0.01,
-        density=0.00025,
+        timestep=0.001,
+        density=0.05,#0.00025*2,
         probs=probabilities
     )
     run_fire.run()
+
+# nohup sudo python forestFire.py &
