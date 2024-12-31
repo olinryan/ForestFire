@@ -55,27 +55,36 @@ class ForestFire():
         size = width * height
 
         # Initialize forest array and reshape
-        self.forest = np.zeros((height, width), dtype=int)  # Create a 2D array
-        num_ones = int(size * self.density)
-        indices = self.prng.choice(size, num_ones, replace=False)
 
-        self.forest.flat[indices] = 1
+                                    # state (0 dead, 1/3 tree, 2 burning) and 6 characteristics:
+        characteristics = 7         # GrowthSpreadRate, NaturalDeathRate, LightningRate, 
+                                    # FireSpreadRate, FireDeathRate, FireExtinguishRate
+
+        self.forest = np.zeros((height, width, characteristics), dtype=int)  # Create a 3D array
+        StartNewGrowth=204
+        StartOldGrowth=204
 
         # Initialize random old growth trees
-        StartOldGrowth=204
+        newgrowth_indices = self.prng.choice(size, StartNewGrowth, replace=False)
+        for index in newgrowth_indices:
+            row, col = divmod(index, width)
+            self.forest[row, col][0] = 1
+            for 
+
+        # Initialize random old growth trees
         oldgrowth_indices = self.prng.choice(size, StartOldGrowth, replace=False)
         for index in oldgrowth_indices:
             row, col = divmod(index, width)
-            self.forest[row, col] = 3
+            self.forest[row, col][0] = 3
 
     def run(self):
         def clear_terminal():
             print("\033[H\033[J", end="")  # ANSI sequence to clear screen and reset cursor
 
         while True:
-            self.cycle()       # perscribed grow-burn cycle 
-            # self.evolve()  # Apply evolution after each cycle
-            self.generation += 1  # Increment generation counter
+            # self.cycle()       # perscribed grow-burn cycle 
+            # # self.evolve()  # Apply evolution after each cycle
+            # self.generation += 1  # Increment generation counter
 
             clear_terminal()  # Clear the screen
             # get counts for the various tree states
@@ -218,7 +227,7 @@ class ForestFire():
 
     def forestToImage(self):
         '''turn the forest array into an image'''
-        height, width = self.forest.shape
+        height, width, chars = self.forest.shape
         image_data = np.zeros((height, width, 3), dtype=np.uint8)
 
         # Define Colors:
@@ -247,11 +256,11 @@ class ForestFire():
 
         for i in range(height):
             for j in range(width):
-                if self.forest[i, j] == 1:
+                if self.forest[i, j][0] == 1:
                     image_data[i, j] = alive 
-                elif self.forest[i, j] == 2:
+                elif self.forest[i, j][0] == 2:
                     image_data[i, j] = burning 
-                elif self.forest[i, j] == 3:
+                elif self.forest[i, j][0] == 3:
                     image_data[i, j] = oldGrowth 
                 else:
                     image_data[i, j] = dead
