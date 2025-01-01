@@ -39,14 +39,14 @@ class ForestFire():
         
         :param timestep: Time delay between frames.
         :param meanProb: Probability for a tree to catch fire.
-        :param sigmaProb: Spread probability for fire.
+        :param mutation_rate: Mutation rate (standard deviation) that new trees will differ from parent
         :param density: Density of trees in the forest, 1 for full.
         """
         self.timestep = timestep
         self.probArray = probs
         self.density = density
         self.generation = 0  # Start from generation 0
-        self.mutation_rate = mutation_rate
+        self.mutation_rate = mutation_rate  
         # Create a PRNG object with a specific seed
         self.prng = np.random.default_rng(seed)       
 
@@ -56,11 +56,11 @@ class ForestFire():
 
         # Initialize forest array and reshape
 
-                                    # state (0 dead, 1/3 tree, 2 burning) and 6 characteristics:
-        characteristics = 7         # GrowthSpreadRate, NaturalDeathRate, LightningRate, 
+                                    # tree type (0 dead, 1/3 tree), burn state (0,1), and 6 characteristics:
+        characteristics = 8         # GrowthSpreadRate, NaturalDeathRate, LightningRate, 
                                     # FireSpreadRate, FireDeathRate, FireExtinguishRate
 
-        self.forest = np.zeros((height, width, characteristics), dtype=int)  # Create a 3D array
+        self.forest = np.zeros((height, width, characteristics), dtype=float)  # Create a 3D array
         StartNewGrowth=204
         StartOldGrowth=204
 
@@ -69,44 +69,59 @@ class ForestFire():
         for index in newgrowth_indices:
             row, col = divmod(index, width)
             self.forest[row, col][0] = 1
-            for 
+            for index, cc in enumerate(self.probArray['BasicTree']):
+                self.forest[row, col][index + 2] = self.probArray['BasicTree'][cc]
 
         # Initialize random old growth trees
         oldgrowth_indices = self.prng.choice(size, StartOldGrowth, replace=False)
         for index in oldgrowth_indices:
             row, col = divmod(index, width)
-            self.forest[row, col][0] = 3
+            self.forest[row, col][0] = 2
+            for index, cc in enumerate(self.probArray['OldGrowth']):
+                self.forest[row, col][index + 2] = self.probArray['OldGrowth'][cc]
 
     def run(self):
         def clear_terminal():
             print("\033[H\033[J", end="")  # ANSI sequence to clear screen and reset cursor
 
         while True:
-            # self.cycle()       # perscribed grow-burn cycle 
+            self.cycle()       # perscribed grow-burn cycle 
             # # self.evolve()  # Apply evolution after each cycle
             # self.generation += 1  # Increment generation counter
 
             clear_terminal()  # Clear the screen
             # get counts for the various tree states
-            unique, counts = np.unique(self.forest, return_counts=True)
+            unique, counts = np.unique(self.forest[:,:,0], return_counts=True)
             treeCount = dict(zip(unique, counts))
+            
             try:
-                fire = treeCount[2]
+                treeCount[1]
+            except KeyError:
+                raise SystemError("No New Growth Remain")
+            
+            try:
+                treeCount[2]
+            except KeyError:
+                raise SystemError("No Old Growth Remain")
+            
+            try:
+                unique, counts = np.unique(self.forest[:,:,1], return_counts=True)
+                fire = dict(zip(unique, counts))
+                fire = fire[1]
             except KeyError:
                 fire = 0
-            print(f"|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- TREES -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
-            print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t |")
-            print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t |")  # Print the new value
-            # Print the header for parameters
-            print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+
+            size = self.forest.shape[0]*self.forest.shape[1]
             
-            print("\n|-- -- -- -- TREE PARAMETERS -- -- -- --|")
-            for tree_type, params in self.probArray.items():
-                print(f"| {tree_type.center(37)} |")
-                for param, value in params.items():
-                    print(f"| {param}: \t\t{value:.5f}\t|")
-                print("|-- -- -- -- -- -- -- -- -- -- -- -- -- |")  # New line after each tree type
-                
+            print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- TREES -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+            print("|\tUnder Growth\t|\tOld Growth\t|\t On Fire \t|\t  Dead  \t|\t Total \t     |")
+            print(f"|\t{str(treeCount[1]).center(12)}\t|\t{str(treeCount[2]).center(10)}\t|\t{str(fire).center(9)}\t|\t{str(size - treeCount[1] - treeCount[2]).center(8)}\t|\t{str(size).center(7)}\t     |")  # Print the new value
+            # Print the header for parameters
+            print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+
+            # Generate and print stats for the forest
+            self.forest_stats()
+
             # Send to Panel
             if runningOnPi:
                 matrix.SetImage(self.forestToImage().convert('RGB'))
@@ -115,115 +130,78 @@ class ForestFire():
             time.sleep(self.timestep)
 
     def cycle(self):
-        
-        self.burn( TreeType=1,
-            FireSpreadRate          =self.probArray['BasicTree']['FireSpreadRate'], 
-            FireDeathRate           =self.probArray['BasicTree']['FireDeathRate'], 
-            FireExtinguishRate      =self.probArray['BasicTree']['FireExtinguishRate'] )  # Spread the fire
-        self.grow(  TreeType=1,
-            GrowthSpreadRate        =self.probArray['BasicTree']['GrowthSpreadRate'], 
-            NaturalDeathRate        =self.probArray['BasicTree']['NaturalDeathRate'], 
-            LightningRate           =self.probArray['BasicTree']['LightningRate'] )  # Grow back trees
-        self.burn( TreeType=3,
-            FireSpreadRate          =self.probArray['OldGrowth']['FireSpreadRate'], 
-            FireDeathRate           =self.probArray['OldGrowth']['FireDeathRate'], 
-            FireExtinguishRate      =self.probArray['OldGrowth']['FireExtinguishRate'] )  # Spread the fire
-        self.grow(  TreeType=3,
-            GrowthSpreadRate        =self.probArray['OldGrowth']['GrowthSpreadRate'], 
-            NaturalDeathRate        =self.probArray['OldGrowth']['NaturalDeathRate'], 
-            LightningRate           =self.probArray['OldGrowth']['LightningRate'] )  # Grow back trees
-
-
-    def burn(self, TreeType, FireSpreadRate=0.9, FireDeathRate=0.1, FireExtinguishRate=0.1):
-        """Simulate fire spreading based on adjacency to burning trees"""
-        height, width = self.forest.shape
+        """
+        Part 1:
+            Simulate the growth and decay of trees based on adjacency to alive trees, 
+            when trees sperad they have a chance to mutate, see mutation function
+        Part 2:
+            Simulate fire spreading based on adjacency to burning trees, 
+            burning trees have a chance to either burn down or self-extingusih 
+        """
+        height, width, chars = self.forest.shape
         new_forest = self.forest.copy()
 
         # Define directions for adjacent cells (N, S, E, W)
         directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
+        ### -- Growth Phase -- ###
         for i in range(height):
             for j in range(width):
-                if self.forest[i, j] == TreeType:  # Tree is alive
-                    # Check if any of the adjacent cells is burning
-                    for dx, dy in directions:
-                        ni, nj = i + dx, j + dy
-                        if 0 <= ni < height and 0 <= nj < width and self.forest[ni, nj] == 2:
-                            if self.prng.uniform(0,1) < FireSpreadRate:  # Spread fire with a probability
-                                new_forest[i, j] = 2  # Set fire
-                                break  # No need to check further neighbors
-
-                elif self.forest[i, j] == 2:  # Burning tree
-                    if self.prng.uniform(0,1) < FireDeathRate:
-                        new_forest[i, j] = 0  # Tree is burned down
-                    elif self.prng.uniform(0,1) < FireExtinguishRate:
-                        new_forest[i, j] = TreeType  # Tree fire goes out
-
-        self.forest = new_forest
-
-    def grow(self, TreeType, GrowthSpreadRate=0.005, NaturalDeathRate=0.005, LightningRate=0.00005):
-        """Simulate trees growing based on adjacency to alive trees"""
-        height, width = self.forest.shape
-        new_forest = self.forest.copy()
-
-        # Define directions for adjacent cells (N, S, E, W)
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
-        for i in range(height):
-            for j in range(width):
-                if self.forest[i, j] == 0:  # Tree is dead
+                if self.forest[i, j][0] == 0:  # Tree is dead (no tree)
                     # Check if any of the adjacent cells is alive
                     for dx, dy in directions:
                         ni, nj = i + dx, j + dy
-                        if 0 <= ni < height and 0 <= nj < width and self.forest[ni, nj] == TreeType:
-                            if self.prng.uniform(0,1) < GrowthSpreadRate:  # Spread growth with probability
-                                new_forest[i, j] = TreeType  # tree grows
-                                break  # No need to check further neighbors
+                        if 0 <= ni < height and 0 <= nj < width and self.forest[ni, nj][0] != 0:    # Adjacent is alive
+                            if self.prng.uniform(0,1) < self.forest[ni, nj][2]:  # Spread growth with probability
+                                new_forest[i, j] = self.mutate(self.forest[ni,nj])  # tree grows
+                                break  # No need to check further neighbors, tree cant grow twice
                 
                 # sometimes trees die
-                elif self.forest[i, j] == TreeType:
-                    if self.prng.uniform(0,1) < NaturalDeathRate:
-                        new_forest[i, j] = 0  # Tree dies
-                    if self.prng.uniform(0,1) < LightningRate:
-                        new_forest[i, j] = 2  # Tree gets hit by Lightning, set on fire
+                elif self.forest[i, j][1] != 1: # tree is alive but not burning
+                    if self.prng.uniform(0,1) < self.forest[i, j][3]:
+                        new_forest[i, j] = [0,0,0,0,0,0,0,0]  # Tree dies
+                    if self.prng.uniform(0,1) < self.forest[i, j][4]:
+                        new_forest[i, j][1] = 1  # Tree gets hit by Lightning, set on fire
+
+        ### -- Burn Phase -- ###
+        for i in range(height):
+            for j in range(width):
+                if self.forest[i, j][0] != 0:  # Tree is alive
+                    # Check if any of the adjacent cells is burning
+                    for dx, dy in directions:
+                        ni, nj = i + dx, j + dy
+                        if 0 <= ni < height and 0 <= nj < width and self.forest[ni, nj][1] == 1:   # Adjacent is on fire
+                            if self.prng.uniform(0,1) < self.forest[ni,nj][5]:  # Spread fire with a probability, dependant on adjacent cells' prob of burning
+                                new_forest[i, j][1] = 1  # Set fire
+                                break  # No need to check further neighbors, tree cant get set on fire twice
+
+                elif self.forest[i, j][1] == 1:  # Burning tree
+                    if self.prng.uniform(0,1) < self.forest[i, j][6]:
+                        new_forest[i, j] = [0,0,0,0,0,0,0,0]  # Tree is burned down
+                    elif self.prng.uniform(0,1) < self.forest[i, j][7]:
+                        new_forest[i, j][1] = 0  # Tree fire goes out, reset to alive 
 
         self.forest = new_forest
+
     
-    def evolve(self):
+    def mutate(self,treeProps):
         """
-        Apply evolutionary changes to tree properties based on survival metrics.
+        Apply mutations changes to tree properties based on survival metrics.
+        expects an individual 'parent' tree [type,characteristics...], that will then 
+        return the properties for the children, based on a normal distribution around 1
+        with a sigma specified. Only effects growth spread rate and natural death rate for now...
         """
-        survival_counts = {key: 0 for key in self.probArray.keys()}
-        
-        # Count the number of surviving trees of each type
-        for tree_type in self.probArray.keys():
-            if tree_type == 'BasicTree':
-                survival_counts[tree_type] = np.sum(self.forest == 1)
-            elif tree_type == 'OldGrowth':
-                survival_counts[tree_type] = np.sum(self.forest == 3)
+        childTree = [treeProps[0]]
 
-        total_trees = sum(survival_counts.values())
-        if total_trees == 0:
-            return  # No trees survived; no evolution possible.
-        print(f"Survival Rate: {survival_counts}")
-        print(f'Total Trees: {total_trees}')
-
-        # Adjust probabilities based on survival rates
-        for tree_type, count in survival_counts.items():
-            survival_rate = count / total_trees
-
-            # Modify probabilities adaptively
-            self.probArray[tree_type]['GrowthSpreadRate'] *=  survival_rate
-            self.probArray[tree_type]['NaturalDeathRate'] *=  survival_rate
-            self.probArray[tree_type]['FireDeathRate'] *= survival_rate
-            self.probArray[tree_type]['FireSpreadRate'] *= survival_rate
-            self.probArray[tree_type]['FireExtinguishRate'] *= survival_rate
-
-            # Apply mutations
-            for key in self.probArray[tree_type]:
-                if self.prng.uniform(0, 1) < self.mutation_rate:
-                    self.probArray[tree_type][key] += self.prng.uniform(-0.01, 0.01)  # Small random mutation
-                    self.probArray[tree_type][key] = max(0, min(1, self.probArray[tree_type][key]))  # Clamp values to [0, 1]
+        probs_to_change = [1,2]     # 1 indexed probabilites to change
+        for index in range(1,len(treeProps)):
+            if index in childTree:
+                change = self.prng.normal(1,self.mutation_rate)
+                childTree.append(treeProps[index]*change)
+            else:
+                childTree.append(treeProps[index])
+            
+        return childTree
 
     def forestToImage(self):
         '''turn the forest array into an image'''
@@ -269,6 +247,63 @@ class ForestFire():
         image = Image.fromarray(image_data, 'RGB')
         assert image_data.shape == (self.forest.shape[0], self.forest.shape[1], 3), "Image dimensions mismatch!"
         return image
+
+    def forest_stats(self):
+        '''
+        pull the stats of the forest
+        '''
+        height, width, chars = self.forest.shape
+        stats = {
+            'BasicTree' : {
+                'Count'             : 0,
+                'CountFire'         : 0,
+                'GrowthSpreadRate'  : [],
+                'NaturalDeathRate'  : [],
+                'LightningRate'     : [],
+                'FireSpreadRate'    : [],
+                'FireDeathRate'     : [],
+                'FireExtinguishRate': []
+            },
+            'OldGrowth' : {
+                'Count'             : 0,
+                'CountFire'         : 0,
+                'GrowthSpreadRate'  : [],
+                'NaturalDeathRate'  : [],
+                'LightningRate'     : [],
+                'FireSpreadRate'    : [],
+                'FireDeathRate'     : [],
+                'FireExtinguishRate': []
+            }
+        }
+        for i in range(height):
+            for j in range(width):
+                if self.forest[i,j,0] == 0:
+                    continue
+                elif self.forest[i,j,0] == 1:
+                    stats['BasicTree']['Count'] += 1
+                    if self.forest[i,j,1] == 1:
+                        stats['BasicTree']['CountFire'] += 1
+                    for x,val in enumerate(stats['BasicTree']):
+                        if val == 'Count' or val == 'CountFire': continue 
+                        stats['BasicTree'][val].append(self.forest[i,j,x])
+                elif self.forest[i,j,0] == 2:
+                    stats['OldGrowth']['Count'] += 1
+                    if self.forest[i,j,1] == 1:
+                        stats['OldGrowth']['CountFire'] += 1
+                    for x,val in enumerate(stats['OldGrowth']):
+                        if val == 'Count' or val == 'CountFire': continue 
+                        stats['OldGrowth'][val].append(self.forest[i,j,x])
+
+        print("\n|-- -- -- -- TREE PARAMETERS -- -- -- -- -- -- --|")
+        for tree_type, params in stats.items():
+            print(f"| {tree_type.center(29)}   mean    max    |")
+            for param, value in params.items():
+                if param == 'Count' or param == 'CountFire': 
+                    print(f"| {param}: \t\t\t{str(value).center(7)}\t  --  \t |")
+                else:
+                    print(f"| {param}: \t\t{np.mean(value):.5f}\t{np.max(value):.5f}\t |")
+            print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- |")  # New line after each tree type
+     
 
 # Main function
 if __name__ == "__main__":
