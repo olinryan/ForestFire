@@ -43,6 +43,7 @@ class ForestFire():
         :param density: Density of trees in the forest, 1 for full.
         :param num_burn_points: Number of initial random fire points.
         """
+        self.mute = True
         self.timestep = timestep
         self.probArray = probs
         self.density = density
@@ -55,7 +56,7 @@ class ForestFire():
         size = width * height
 
         # Initialize forest array and reshape
-        self.forest = np.zeros((height, width), dtype=int)  # Create a 2D array
+        self.forest = np.ones((height, width), dtype=int)  # Create a 2D array
         num_ones = int(size * self.density)
         indices = self.prng.choice(size, num_ones, replace=False)
 
@@ -72,26 +73,42 @@ class ForestFire():
         def clear_terminal():
             print("\033[H\033[J", end="")  # ANSI sequence to clear screen and reset cursor
 
+        tic = 0
+        print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t|")
         while True:
-            self.cycle()       # perscribed grow-burn cycle 
-            clear_terminal()  # Clear the screen
+            self.cycle()       # perscribed grow-burn cycle
+            if not self.mute:
+                clear_terminal()  # Clear the screen
             # get counts for the various tree states
             unique, counts = np.unique(self.forest, return_counts=True)
-            treeCount = dict(zip(unique, counts))
+
             try:
-                fire = treeCount[2]
-            except KeyError:
-                fire = 0
-            print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- Trees -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
-            print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t|")
-            print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t|")  # Print the new value
-            print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+                treeCount = dict(zip(unique, counts))
+                for i_avail in range(4):
+                    if i_avail not in treeCount:
+                        treeCount[i_avail] = 0
+                try:
+                    fire = treeCount[2]
+                except KeyError:
+                    fire = 0
+                # print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t|")  # Print the new value
+            except Exception as e:
+                print(f'shit {e}')
+            if not self.mute:
+                print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- Trees -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
+                print("|\tUnder Growth\t|\tOld Growth\t|\tOn Fire  \t|\tDead    \t|\tTotal     \t|")
+                print(f"|\t   {treeCount[1]}  \t|\t    {treeCount[3]}   \t|\t   {fire}    \t|\t {treeCount[0]}     \t|\t  {self.forest.size}  \t|")  # Print the new value
+                print("|-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --|")
             # Send to Panel
             if runningOnPi:
                 matrix.SetImage(self.forestToImage().convert('RGB'))
             # wait
             # input("continue")
-            time.sleep(self.timestep)
+            # time.sleep(self.timestep)
+            tic += 1
+            if treeCount[0] == self.forest.size:
+                break
+        return tic
 
     def cycle(self):
         
@@ -218,17 +235,19 @@ if __name__ == "__main__":
     # Instantiate the class with your desired parameters
     probabilities = {
         'BasicTree' : {
-            'GrowthSpreadRate'  : 0.02,
-            'NaturalDeathRate'  : 0.01,
-            'LightningRate'     : 0.00001,      # 0.0000001
+            # 'GrowthSpreadRate'  : 0.01,
+            'GrowthSpreadRate'  : 0.0,
+            'NaturalDeathRate'  : 0.0,
+            'LightningRate'     : 0.01,      # 0.0000001
             'FireSpreadRate'    : 0.9,
             'FireDeathRate'     : 0.1,
             'FireExtinguishRate': 0.1
         },
         'OldGrowth' : {
-            'GrowthSpreadRate'  : 0.001,
-            'NaturalDeathRate'  : 0.0005,
-            'LightningRate'     : 0.0000005,    # 0.000005
+            # 'GrowthSpreadRate'  : 0.002,
+            'GrowthSpreadRate'  : 0.0,
+            'NaturalDeathRate'  : 0.00,
+            'LightningRate'     : 0.5,    # 0.000005
             'FireSpreadRate'    : 0.3,   # 0.03 # Resistance to burning
             'FireDeathRate'     : 0.001,
             'FireExtinguishRate': 0.01
@@ -236,8 +255,9 @@ if __name__ == "__main__":
     }
 
     run_fire = ForestFire(
-        timestep=0.01,
+        timestep=0.0,
         density=0.00025,
         probs=probabilities
     )
-    run_fire.run()
+    rv = run_fire.run()
+    print(rv)
